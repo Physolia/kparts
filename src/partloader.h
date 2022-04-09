@@ -108,6 +108,52 @@ static T *createPartInstanceForMimeType(const QString &mimeType, QWidget *parent
     return nullptr;
 }
 
+/**
+ * Attempts to create a KPart from the given metadata.
+ *
+ * @code
+ * KPluginFactory::Result<MyPart> result = KParts::PartLoader::createPartInstance<MyPart>(metaData, parentWidget, parent, args);
+ * if (result) {
+ *     // result.plugin is valid and can be accessed
+ * } else {
+ *     // result contains information about the error
+ * }
+ * @endcode
+ * If there is no extra error handling needed the plugin can be directly accessed and checked if it is a nullptr
+ * @code
+ * if (auto plugin = KParts::PartLoader::createPartInstance<MyPart>(metaData, parentWidget, parent, args).plugin) {
+ *     // The plugin is valid and can be accessed
+ * }
+ * @endcode
+ * @param data KPluginMetaData from which the plugin should be loaded
+ * @param parentWidget The parent widget
+ * @param parent The parent object
+ * @param args A list of arguments to be passed to the part
+ * @return Result object which contains the plugin instance and potentially error information
+ * @since 5.94
+ */
+template<typename T>
+static KPluginFactory::Result<T>
+createPartInstance(const KPluginMetaData &data, QWidget *parentWidget = nullptr, QObject *parent = nullptr, const QVariantList &args = {})
+{
+    KPluginFactory::Result<T> result;
+    KPluginFactory::Result<KPluginFactory> factoryResult = KPluginFactory::loadFactory(data);
+    if (!factoryResult.plugin) {
+        result.errorString = factoryResult.errorString;
+        result.errorReason = factoryResult.errorReason;
+        return result;
+    }
+    T *instance = factoryResult.plugin->create<T>(parentWidget, parent, QString(), args);
+    if (!instance) {
+        result.errorString = QObject::tr("KPluginFactory could not load the plugin: %1").arg(data.fileName());
+        result.errorText = QStringLiteral("KPluginFactory could not load the plugin: %1").arg(data.fileName());
+        result.errorReason = KPluginFactory::INVALID_KPLUGINFACTORY_INSTANTIATION;
+    } else {
+        result.plugin = instance;
+    }
+    return result;
+}
+
 } // namespace
 } // namespace
 
